@@ -1,4 +1,4 @@
-# Flask API Documentation
+# File CLASSIFIER Flask API Documentation
 
 This is a Flask API that provides endpoints for managing files in a MySQL database. The API allows creating and retrieving files, along with their associated details such as path, date, name, address, company, and category.
 
