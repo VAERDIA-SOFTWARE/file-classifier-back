@@ -69,8 +69,7 @@ def get_files():
 
     files = []
     for row in rows:
-        file = {
-            'id': row[0],
+        file = {          
             'path': row[1],
             'date': row[2],
             'name': row[3],
