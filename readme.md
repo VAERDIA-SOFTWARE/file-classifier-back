@@ -1,48 +1,137 @@
-# File CLASSIFIER Flask API Documentation
+# API Documentation
 
-This is a Flask API that provides endpoints for managing files in a MySQL database. The API allows creating and retrieving files, along with their associated details such as path, date, name, address, company, and category.
+This is the documentation for the Flask API. The API provides endpoints
+to manage files, categories, and societes in a MySQL database.
 
-## API Endpoints
+## Table of Contents
 
-- `GET /`: Home endpoint that returns a simple message indicating the home page.
+- [Home](#home)
+- [Create Files](#create-files)
+- [GetFiles](#get-files)
+- [Export Sheet](#export-sheet)
+- [GetCategories](#get-categories)
+- [Get Societes](#get-societes)
 
-- `POST /files`: Endpoint for creating files. It expects a JSON payload containing an array of file objects with properties such as path, date, name, address, company, and category.
+## Home
 
-- `GET /files`: Endpoint for retrieving a list of all files stored in the database.
+### Description
 
-## Installation and Setup
+This endpoint is used to check if the API is running successfully.
 
-1. Clone the repository:
+- **URL**: `/`
+- **Method**: GET
+- **Response**: "Home"
 
-   ```bash
-   git clone https://github.com/your-repo-url.git
+### Example
 
-2. Install the required dependencies:
+``` GET / ```
 
-    ```python
-    pip install -r requirements.txt
+## Create Files
 
-3. Configure the MySQL database connection in app.py:
+### Description
 
-    ```python
-    app.config['MYSQL_HOST'] = 'localhost'
-    app.config['MYSQL_USER'] = 'root'
-    app.config['MYSQL_PASSWORD'] = ''
-    app.config['MYSQL_DB'] = 'classifier'
+This endpoint is used to create new files in the database.
 
-    You can find sql Code to generate the data base in classifier.sql
+- **URL**: `/files`
+- **Method**: POST
+- **RequestBody**: Array of file objects
+  - `path` (string): The file path 
+  - `date` (string): The file date
+  - `name` (string): The file name 
+  - `adresse` (string): The file adresse
+  - `societe` (string): The file societe
+  - `categorie` (string, optional): The file categorie
+  - `phone_number` (string, optional): The file phone number
+- **Response**: JSON object with a message indicating the status of the operation
 
-4. Run the Flask application:
+### Example
 
-    ```bash
-   python app.py
+```json POST /files
 
-## Usage
+Request Body: [
+    { 
+    "path": "/path/to/file1", 
+    "date":"2023-06-09", 
+    "name": "File 1",
+    "adresse": "Address 1",
+    "societe": "Societe 1",
+    "categorie": "Category 1",
+    "phone_number": "1234567890" }, 
+    {
+    "path": "/path/to/file2",
+    "date": "2023-06-10",
+    "name": "File 2",
+    "adresse": "Address2",
+    "societe": "Societe 2",
+    "categorie": "Category 2",
+    "phone_number": "0987654321" } ]
+ ```
 
-- Make requests to the API endpoints using your preferred HTTP client (e.g., cURL, Postman).
-- For creating files, send a POST request to /files with the file details in the request body as a JSON payload.
-- To retrieve all files, send a GET request to /files.
+## Get Files
+
+### Description
+
+This endpoint is used to retrieve files from the database.
+
+- **URL**: `/files`  $
+- **Method**: GET - **QueryParameters**:  
+  - `query` (string, optional): Search query to filterfiles
+  - `categorie` (string, optional): Filter files by categorie
+  - `societe` (string, optional): Filter files by societe
+  - `page`(integer, optional): Page number for pagination (default: 1)
+  - `per_page` (integer, optional): Number of items per page (default:1)
   
-## Contributing
+- **Response**: JSON object with the list of files and pagination information
 
-Contributions are welcome! If you find any issues or have suggestions for improvements, feel free to open an issue or submit a pull request.
+### Example
+
+``` GET /files?query=keyword&categorie=Category&page=1&per_page=10
+```
+
+## Export Sheet
+
+### Description
+
+This endpoint is used to export files as an Excel sheet.
+
+- **URL**: `/files/exportsheet`
+- **Method**: GET - **QueryParameters**:
+  - `query` (string, optional): Search query to filterfiles
+  - `categorie` (string, optional): Filter files by categorie
+  - `societe` (string, optional): Filter files by societe -
+- **Response**: Excel file attachment
+
+### Example
+
+``` GET /files/exportsheet?query=keyword&categorie=Category ```
+
+## Get Categories
+
+### Description
+
+This endpoint is used to retrieve the list of categories
+
+from the database.
+
+- **URL**: `/categories`
+- **Method**: GET
+- **Response**: JSON array with the list of categories
+
+### Example
+
+``` GET /categories ```
+
+## Get Societes
+
+### Description
+
+This endpoint is used to retrieve the list of societes from the
+database.
+
+- **URL**: `/societes`
+- **Method**: GET
+- **Response**: JSON array with the list of societes
+
+### Example
+
+``` GET /societes ```
