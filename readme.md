@@ -7,7 +7,7 @@ to manage files, categories, and societes in a MySQL database.
 
 - [Home](#home)
 - [Create Files](#create-files)
-- [GetFiles](#get-files)
+- [Get Files](#get-files)
 - [Export Sheet](#export-sheet)
 - [GetCategories](#get-categories)
 - [Get Societes](#get-societes)
