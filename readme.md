@@ -85,8 +85,7 @@ This endpoint is used to retrieve files from the database.
 
 ### Example
 
-``` GET /files?query=keyword&categorie=Category&page=1&per_page=10
-```
+``` GET /files?query=keyword&categorie=Category&page=1&per_page=10 ```
 
 ## Export Sheet
 
