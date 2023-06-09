@@ -1,23 +1,27 @@
+from io import BytesIO
+from flask import make_response
 import io
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, make_response
 from flask_mysqldb import MySQL
 from flask_cors import CORS, cross_origin
 import pandas as pd
-
+import re
 
 app = Flask(__name__)
 CORS(app)
 
-app.config['MYSQL_HOST'] = 'localhost'  
-app.config['MYSQL_USER'] = 'root'       
-app.config['MYSQL_PASSWORD'] = ''  
-app.config['MYSQL_DB'] = 'classifier'   
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = ''
+app.config['MYSQL_DB'] = 'classifier'
 mysql = MySQL(app)
+
 
 @app.route('/')
 @cross_origin()
 def Home():
     return "Home"
+
 
 @app.route('/files', methods=['POST'])
 @cross_origin()
@@ -40,23 +44,28 @@ def create_files():
             categorie = 'UNKNOWN'
         else:
             categorie = file_data['categorie']
-            
+        phone_number = ''
+        reName = re.sub(r"[^a-zA-ZÀ-ÿ]", "", name)
         if file_data.get('phone_number') == '':
-            phone_number = """SELECT phone_number FROM vicidial WHERE CONCAT(first_name, ' ', middle_name, ' ', last_name) = ( SELECT name FROM files )"""
-            cur.execute("INSERT INTO file (phone_number) VALUES (%s)",(phone_number))
+            phone_query = f"SELECT phone_number FROM clients WHERE name = {reName}"
+            cur.execute(phone_query)
+            result = cur.fetchone()
+            if result:
+                phone_number = result[0]
         else:
             phone_number = file_data['phone_number']
-            
-        cur.execute("SELECT id FROM file WHERE path=%s AND date=%s", (path, date))
+
+        cur.execute(
+            "SELECT id FROM file WHERE path=%s AND date=%s", (path, date))
         existing_file = cur.fetchone()
 
         if existing_file:
-            
-            continue  
+
+            continue
 
         cur.execute(
             "INSERT INTO file (path, date, name, adresse, societe, categorie,phone_number) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (path, date, name, adresse, societe, categorie,phone_number)
+            (path, date, name, adresse, societe, categorie, phone_number)
         )
         mysql.connection.commit()
 
@@ -71,13 +80,15 @@ def get_files():
     search_query = request.args.get('query')
     search_categorie = request.args.get('categorie')
     search_societe = request.args.get('societe')
-    page = request.args.get('page', default=1, type=int)  # Get the page number, defaulting to 1 if not provided
-    per_page = request.args.get('per_page', default=10, type=int)  # Get the number of items per page, defaulting to 10 if not provided
+    # Get the page number, defaulting to 1 if not provided
+    page = request.args.get('page', default=1, type=int)
+    # Get the number of items per page, defaulting to 10 if not provided
+    per_page = request.args.get('per_page', default=10, type=int)
 
     cur = mysql.connection.cursor()
 
     # Global Search
-    query = "SELECT * FROM file WHERE 1=1"  
+    query = "SELECT * FROM file WHERE 1=1"
     params = []
 
     if search_query:
@@ -129,10 +140,6 @@ def get_files():
 
     return jsonify(response)
 
-from io import BytesIO
-
-from io import BytesIO
-from flask import make_response
 
 @app.route('/files/exportsheet', methods=['GET'])
 @cross_origin()
@@ -144,7 +151,7 @@ def export_sheet():
     cur = mysql.connection.cursor()
 
     # Global Search
-    query = "SELECT * FROM file WHERE 1=1"  
+    query = "SELECT * FROM file WHERE 1=1"
     params = []
 
     if search_query:
@@ -195,8 +202,6 @@ def export_sheet():
     return response
 
 
-
-
 @app.route('/categories', methods=['GET'])
 @cross_origin()
 def get_categories():
@@ -205,12 +210,13 @@ def get_categories():
     rows = cur.fetchall()
     cur.close()
 
-    categories = set()  
+    categories = set()
 
     for row in rows:
         categories.add(row[0])
 
     return jsonify(list(categories))
+
 
 @app.route('/societes', methods=['GET'])
 @cross_origin()
