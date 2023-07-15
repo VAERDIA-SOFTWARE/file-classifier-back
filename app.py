@@ -1,18 +1,19 @@
-from io import BytesIO
-from flask import make_response
-import io
-from flask import Flask, jsonify, request, send_file, make_response
+from flask import Flask, jsonify, request, make_response
 from flask_mysqldb import MySQL
 from flask_cors import CORS, cross_origin
-import pandas as pd
 import re
+import pandas as pd
+from io import BytesIO
+import io
+from datetime import datetime, timedelta
+
 
 app = Flask(__name__)
 CORS(app)
 
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = ''
+app.config['MYSQL_PASSWORD'] = 'Vaerdia2023'
 app.config['MYSQL_DB'] = 'classifier'
 mysql = MySQL(app)
 
@@ -41,19 +42,19 @@ def create_files():
         societe = file_data['societe']
 
         if file_data.get('categorie') == '':
-            categorie = 'UNKNOWN'
+            categorie = 'inconnue'
         else:
             categorie = file_data['categorie']
         phone_number = ''
         reName = re.sub(r"[^a-zA-ZÀ-ÿ]", "", name)
-        if file_data.get('phone_number') == '':
-            phone_query = f"SELECT phone_number FROM clients WHERE name = {reName}"
+        if file_data.get('phone') == '':
+            phone_query = f"SELECT phone_number FROM clients WHERE name = '{reName}'"
             cur.execute(phone_query)
             result = cur.fetchone()
             if result:
                 phone_number = result[0]
         else:
-            phone_number = file_data['phone_number']
+            phone_number = file_data['phone']
 
         cur.execute(
             "SELECT id FROM file WHERE path=%s AND date=%s", (path, date))
@@ -62,7 +63,6 @@ def create_files():
         if existing_file:
 
             continue
-
         cur.execute(
             "INSERT INTO file (path, date, name, adresse, societe, categorie,phone_number) VALUES (%s, %s, %s, %s, %s, %s, %s)",
             (path, date, name, adresse, societe, categorie, phone_number)
@@ -74,12 +74,50 @@ def create_files():
     return jsonify({'message': 'Files created successfully'})
 
 
+@app.route('/new-execution', methods=['GET'])
+@cross_origin()
+def setNewHistory():
+    cur = mysql.connection.cursor()
+    today = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(today)
+    cur.execute(
+        "INSERT INTO history (date) VALUES (%s)",
+        [today]
+    )
+    mysql.connection.commit()
+    cur.close()
+
+    return jsonify({'message': 'Files created successfully'})
+
+
+@app.route('/latest-execution', methods=['GET'])
+@cross_origin()
+def getLatestExecution():
+    cur = mysql.connection.cursor()
+    cur.execute(
+        "SELECT * FROM history ORDER BY date DESC LIMIT 1"
+    )
+    row = cur.fetchone()
+    cur.close()
+
+    if row is None:
+        return jsonify({'message': 'No execution history found'}), 404
+
+    execution = {
+        'date': row[1].strftime('%Y-%m-%d %H:%M:%S')
+    }
+    return jsonify(execution)
+
+
 @app.route('/files', methods=['GET'])
 @cross_origin()
 def get_files():
     search_query = request.args.get('query')
     search_categorie = request.args.get('categorie')
     search_societe = request.args.get('societe')
+    excel = request.args.get('excel')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
     # Get the page number, defaulting to 1 if not provided
     page = request.args.get('page', default=1, type=int)
     # Get the number of items per page, defaulting to 10 if not provided
@@ -89,10 +127,13 @@ def get_files():
 
     # Global Search
     query = "SELECT * FROM file WHERE 1=1"
+    if not excel:
+        query += " AND excel = 0"
+
     params = []
 
     if search_query:
-        query += " AND (path LIKE %s OR date LIKE %s OR name LIKE %s OR adresse LIKE %s OR societe LIKE %s OR categorie LIKE %s or phone_number LIKE %s)"
+        query += " AND (path LIKE %s OR name LIKE %s OR adresse LIKE %s OR societe LIKE %s OR categorie LIKE %s or phone_number LIKE %s)"
         params.extend(['%{}%'.format(search_query)] * 7)
 
     # Categorie Filter
@@ -105,6 +146,16 @@ def get_files():
         query += " AND societe = %s"
         params.append(search_societe)
 
+    if start_date and end_date:
+        start_date_obj = datetime.strptime(start_date, '%m-%d-%Y')
+        end_date_obj = datetime.strptime(end_date, '%m-%d-%Y')
+        # Add one day to end_date
+        end_date_obj += timedelta(days=1)
+        # Format start_date and end_date to string
+        start_date_str = start_date_obj.strftime('%Y-%m-%d %H:%M:%S')
+        end_date_str = end_date_obj.strftime('%Y-%m-%d %H:%M:%S')
+        query += " AND date BETWEEN %s AND %s"
+        params.extend([start_date_str, end_date_str])
     # Get the total count of rows matching the query
     cur.execute(query, params)
     total_count = cur.rowcount
@@ -120,9 +171,14 @@ def get_files():
 
     files = []
     for row in rows:
+        # Convert string to datetime
+        # date = datetime.strptime(row[2], '%m/%d/%Y %H:%M')
+        formatted_date = ''
+        if row[2]:
+            formatted_date = row[2].strftime('%d-%m-%Y %H:%M:%S')
         file = {
             'path': row[1],
-            'date': row[2],
+            'date': formatted_date,
             'name': row[3],
             'adresse': row[4],
             'societe': row[5],
@@ -130,7 +186,10 @@ def get_files():
             'phone_number': row[7]
         }
         files.append(file)
-
+    if (not rows):
+        total_count = 0
+        page = 1
+        per_page = 0
     response = {
         'total_count': total_count,
         'page': page,
@@ -147,11 +206,11 @@ def export_sheet():
     search_query = request.args.get('query')
     search_categorie = request.args.get('categorie')
     search_societe = request.args.get('societe')
-
     cur = mysql.connection.cursor()
 
     # Global Search
-    query = "SELECT * FROM file WHERE 1=1"
+    query = "SELECT * FROM file WHERE 1=1 AND excel = 0"
+
     params = []
 
     if search_query:
@@ -171,7 +230,6 @@ def export_sheet():
     # Get the rows matching the query
     cur.execute(query, params)
     rows = cur.fetchall()
-    cur.close()
 
     files = []
     for row in rows:
@@ -198,7 +256,24 @@ def export_sheet():
     response = make_response(excel_file.getvalue())
     response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     response.headers['Content-Disposition'] = 'attachment; filename=files_export.xlsx'
+    query = "UPDATE file SET excel = 1 WHERE 1=1 AND excel = 0"
+    params = []
 
+    if search_query:
+        query += " AND (path LIKE %s OR date LIKE %s OR name LIKE %s OR adresse LIKE %s OR societe LIKE %s OR categorie LIKE %s or phone_number LIKE %s)"
+        params.extend(['%{}%'.format(search_query)] * 7)
+
+    # Categorie Filter
+    if search_categorie:
+        query += " AND categorie = %s"
+        params.append(search_categorie)
+
+    # Societe Filter
+    if search_societe:
+        query += " AND societe = %s"
+        params.append(search_societe)
+    cur.execute(query, params)
+    cur.close()
     return response
 
 
@@ -235,4 +310,4 @@ def get_societes():
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='localhost', port=5000)
