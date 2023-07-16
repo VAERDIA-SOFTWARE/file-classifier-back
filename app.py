@@ -14,6 +14,7 @@ CORS(app)
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = 'Vaerdia2023'
+# app.config['MYSQL_PASSWORD'] = ''
 app.config['MYSQL_DB'] = 'classifier'
 mysql = MySQL(app)
 
@@ -134,7 +135,7 @@ def get_files():
 
     if search_query:
         query += " AND (path LIKE %s OR name LIKE %s OR adresse LIKE %s OR societe LIKE %s OR categorie LIKE %s or phone_number LIKE %s)"
-        params.extend(['%{}%'.format(search_query)] * 7)
+        params.extend(['%{}%'.format(search_query)] * 6)
 
     # Categorie Filter
     if search_categorie:
@@ -206,29 +207,51 @@ def export_sheet():
     search_query = request.args.get('query')
     search_categorie = request.args.get('categorie')
     search_societe = request.args.get('societe')
+    excel = request.args.get('excel')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
     cur = mysql.connection.cursor()
 
-    # Global Search
-    query = "SELECT * FROM file WHERE 1=1 AND excel = 0"
+    # Construct the base query
+    query = "SELECT * FROM file WHERE excel = %s"
 
+    # Construct the conditions and parameters
+    conditions = []
     params = []
 
     if search_query:
-        query += " AND (path LIKE %s OR date LIKE %s OR name LIKE %s OR adresse LIKE %s OR societe LIKE %s OR categorie LIKE %s or phone_number LIKE %s)"
-        params.extend(['%{}%'.format(search_query)] * 7)
+        conditions.append("(path LIKE %s OR name LIKE %s OR adresse LIKE %s OR societe LIKE %s OR categorie LIKE %s OR phone_number LIKE %s)")
+        params.extend(['%{}%'.format(search_query)] * 6)
 
-    # Categorie Filter
     if search_categorie:
-        query += " AND categorie = %s"
+        conditions.append("categorie = %s")
         params.append(search_categorie)
 
-    # Societe Filter
     if search_societe:
-        query += " AND societe = %s"
+        conditions.append("societe = %s")
         params.append(search_societe)
 
-    # Get the rows matching the query
-    cur.execute(query, params)
+    if start_date and end_date:
+        start_date_obj = datetime.strptime(start_date, '%m-%d-%Y')
+        end_date_obj = datetime.strptime(end_date, '%m-%d-%Y')
+        end_date_obj += timedelta(days=1)
+        start_date_str = start_date_obj.strftime('%Y-%m-%d %H:%M:%S')
+        end_date_str = end_date_obj.strftime('%Y-%m-%d %H:%M:%S')
+        conditions.append("date BETWEEN %s AND %s")
+        params.extend([start_date_str, end_date_str])
+
+    # Add the conditions to the query
+    if conditions:
+        query += " AND " + " AND ".join(conditions)
+
+    # Set the parameter based on the route
+    if excel and excel.lower() == 'true':
+        excel_value = 1
+    else:
+        excel_value = 0
+
+    # Execute the query with the updated parameter
+    cur.execute(query, (excel_value, *params))
     rows = cur.fetchall()
 
     files = []
@@ -240,7 +263,8 @@ def export_sheet():
             'adresse': row[4],
             'societe': row[5],
             'categorie': row[6],
-            'phone_number': row[7]
+            'phone_number': row[7],
+            'excel': row[8]
         }
         files.append(file)
 
@@ -256,25 +280,18 @@ def export_sheet():
     response = make_response(excel_file.getvalue())
     response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     response.headers['Content-Disposition'] = 'attachment; filename=files_export.xlsx'
-    query = "UPDATE file SET excel = 1 WHERE 1=1 AND excel = 0"
-    params = []
 
-    if search_query:
-        query += " AND (path LIKE %s OR date LIKE %s OR name LIKE %s OR adresse LIKE %s OR societe LIKE %s OR categorie LIKE %s or phone_number LIKE %s)"
-        params.extend(['%{}%'.format(search_query)] * 7)
+    if excel_value == 0:
+        update_query = "UPDATE file SET excel = 1 WHERE excel = 0"
 
-    # Categorie Filter
-    if search_categorie:
-        query += " AND categorie = %s"
-        params.append(search_categorie)
+        if conditions:
+            update_query += " AND " + " AND ".join(conditions)
 
-    # Societe Filter
-    if search_societe:
-        query += " AND societe = %s"
-        params.append(search_societe)
-    cur.execute(query, params)
+        cur.execute(update_query, params)
+
     cur.close()
     return response
+
 
 
 @app.route('/categories', methods=['GET'])
@@ -310,4 +327,4 @@ def get_societes():
 
 
 if __name__ == '__main__':
-    app.run(host='localhost', port=5000)
+    app.run(host='localhost', port=5500)
